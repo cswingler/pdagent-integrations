@@ -107,11 +107,23 @@ class NagiosEvent:
             raise ValueError(msg)
 
     def _pagerduty_event_type(self):
-        return {
+        resolutions = {
             "PROBLEM": "trigger",
             "ACKNOWLEDGEMENT": "acknowledge",
             "RECOVERY": "resolve"
-        }[self._event_type]
+        }
+        if self._details.treat_downtime_as_resolution:
+            resolutions['DOWNTIMESTART'] = 'resolve'
+            resolutions['DOWNTIMEEND']  = 'resolve'
+        if self.details.treat_flapping_as_resolution:
+            resolutions['FLAPPINGSTART'] = 'resolve'
+            resolutions['FLAPPINGSTOP'] = 'resolve'
+        try:
+            event_type = resolutions[self._event_type]
+        except KeyError:
+            sys.exit("Error: Unknown/unhandled $NOTITFICATIONTYPE$: %s" % self._event_type)
+
+        return event_type
 
 
 def main():
@@ -150,8 +162,7 @@ def build_queue_arg_parser(description):
         "--event-type",
         dest="event_type",
         required=True,
-        help="Event type",
-        choices=["PROBLEM", "ACKNOWLEDGEMENT", "RECOVERY"]
+        help="Event type (Nagios $NOTIFICATIONTYPE$ value)",
     )
     parser.add_argument(
         "-i",
@@ -171,8 +182,20 @@ def build_queue_arg_parser(description):
         "--notification-type",
         dest="notification_type",
         required=True,
-        help="Nagios notification type (host or service)",
+        help="Nagios Object type (host or service)",
         choices=["service", "host"]
+    )
+    parser.add_argument(
+        "-d",
+        "--treat-downtime-as-resolution",
+        dest="treat_downtime_as_resolution",
+        help="Treats DOWNTIMESTART and DOWNTIMEEND $NOTIFICATIONTYPE$ as a resolution"
+    )
+    parser.add_argument(
+        "-l",
+        "--treat-flapping-as-resolution",
+        dest="treat_flapping_as_resolution",
+        help="Treats FLAPPINGSTART and FLAPPINGSTOP $NOTIFICATIONTYPE$ as a resolution"
     )
     return parser
 
